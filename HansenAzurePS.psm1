@@ -51,7 +51,7 @@ function Get-GitHubRawPath
         $remotePath = $remotePath.Substring(0,$remotePath.Length-4)
     }
 
-    $rawHost = "https://raw.githubusercontent.com/"
+    $rawHost = "https://raw.githubusercontent.com"
 
     $rawUrl = $rawHost + $remotePath + "/" + $(git rev-parse $Revision) + "/" + $fileRelativePath
 
