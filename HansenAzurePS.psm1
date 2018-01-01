@@ -1,11 +1,3 @@
-<#
-    TODO:
-        - Is this a git repo, what is the root of the git repo
-        - Resolving relative paths
-
-
-#>
-
 function Get-GitHubRawPath
 {
     param(
