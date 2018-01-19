@@ -101,7 +101,14 @@ function New-AppRegForAADAuth {
         [String]$Environment = "AzureCloud",
 
         [Parameter(Mandatory = $false, Position = 3)]
-        [String]$Password
+        [String]$Password,
+
+        [Parameter(Mandatory = $false)]
+        [String[]]$AADDelegatePermissions = @("User.Read"),
+
+        [Parameter(Mandatory = $false)]
+        [String[]]$GraphDelegatePermissions = @("User.Read", "User.ReadBasic.All")
+        
     )
 
     <#
@@ -167,12 +174,37 @@ function New-AppRegForAADAuth {
     $displayName = $SiteUri.Host
     [string[]]$replyUrl = $SiteUri.AbsoluteUri + ".auth/login/aad/callback"
 
+    #AAD Permissions
     $reqAAD = New-Object -TypeName "Microsoft.Open.AzureAD.Model.RequiredResourceAccess"
-    $reqAAD.ResourceAppId = "00000002-0000-0000-c000-000000000000" #See above on how to find GUIDs 
-    $delPermission1 = New-Object -TypeName "Microsoft.Open.AzureAD.Model.ResourceAccess" -ArgumentList "311a71cc-e848-46a1-bdf8-97ff7156d8e6", "Scope" #Sign you in and read your profile
-    $reqAAD.ResourceAccess = $delPermission1
+    $reqAAD.ResourceAppId = "00000002-0000-0000-c000-000000000000" #See above on how to find GUIDs
 
-    $appReg = New-AzureADApplication -DisplayName $displayName -IdentifierUris $SiteUri -Homepage $SiteUri -ReplyUrls $replyUrl -PasswordCredential $PasswordCredential -RequiredResourceAccess $reqAAD
+    $svcPrincipal = $(Get-AzureADServicePrincipal -SearchString "Windows azure active directory") | Where-Object {$_.AppId -eq "00000002-0000-0000-c000-000000000000"}
+    foreach ($perm in $AADDelegatePermissions) {
+        $permId = $($svcPrincipal.Oauth2Permissions | Where-Object { $_.Value -eq $perm}).Id
+        $delPermission1 = New-Object -TypeName "Microsoft.Open.AzureAD.Model.ResourceAccess" -ArgumentList $permId, "Scope"
+        if ([String]::IsNullOrEmpty($reqAAD.ResourceAccess)) {
+            $reqAAD.ResourceAccess = $delPermission1    
+        } else {
+            $reqAAD.ResourceAccess += $delPermission1
+        }
+    }
+
+    #Graph Permissions
+    $reqGraph1 = New-Object -TypeName "Microsoft.Open.AzureAD.Model.RequiredResourceAccess"
+    $reqGraph1.ResourceAppId = "00000003-0000-0000-c000-000000000000" #See above on how to find GUIDs 
+
+    $svcPrincipal = $(Get-AzureADServicePrincipal -SearchString "Microsoft Graph") | Where-Object {$_.AppId -eq "00000003-0000-0000-c000-000000000000"}
+    foreach ($perm in $GraphDelegatePermissions) {
+        $permId = $($svcPrincipal.Oauth2Permissions | Where-Object { $_.Value -eq $perm}).Id
+        $delPermission1 = New-Object -TypeName "Microsoft.Open.AzureAD.Model.ResourceAccess" -ArgumentList $permId, "Scope" 
+        if ([String]::IsNullOrEmpty($reqGraph1.ResourceAccess)) {
+            $reqGraph1.ResourceAccess = $delPermission1    
+        } else {
+            $reqGraph1.ResourceAccess += $delPermission1
+        }
+    }
+
+    $appReg = New-AzureADApplication -DisplayName $displayName -IdentifierUris $SiteUri -Homepage $SiteUri -ReplyUrls $replyUrl -PasswordCredential $PasswordCredential -RequiredResourceAccess $reqAAD, $reqGraph1
 
     $loginBaseUrl = $(Get-AzureRmEnvironment -Name $Environment).ActiveDirectoryAuthority
 
@@ -231,6 +263,7 @@ function Set-WebAppAADAuth {
     $auth.properties.clientId = $ClientId
     $auth.properties.clientSecret = $ClientSecret
     $auth.properties.issuer = $IssuerUrl
+    $auth.properties.additionalLoginParams = @( "resource=https://graph.microsoft.com" )
 
     New-AzureRmResource -PropertyObject $auth.properties -ResourceGroupName $ResourceGroupName -ResourceType Microsoft.Web/sites/config -ResourceName $authResourceName -ApiVersion 2016-08-01 -Force
 }
