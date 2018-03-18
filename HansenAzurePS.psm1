@@ -268,6 +268,67 @@ function Set-WebAppAADAuth {
     New-AzureRmResource -PropertyObject $auth.properties -ResourceGroupName $ResourceGroupName -ResourceType Microsoft.Web/sites/config -ResourceName $authResourceName -ApiVersion 2016-08-01 -Force
 }
 
+function Get-AzureBearerToken {
+    param(    
+        [Parameter(Mandatory = $false)]
+        [ValidateSet("AzureCloud", "AzureUsGovernment", "AzureGermanCloud", "AzureChinaCloud")]
+        [String]$Environment = "AzureCloud"
+    )
+
+    # Inspiration for this function from:
+    # - ArmClient: https://github.com/projectkudu/ARMClient
+    # - www.bizbert.com/bizbert/2015/07/08/SettingUpPostManToCallTheAzureManagementAPIs.aspx
+
+    $azcontext = Get-AzureRmContext
+    if ([string]::IsNullOrEmpty($azcontext.Account) -or
+        !($azcontext.Environment.Name -eq $Environment)) {
+        $azcontext = Login-AzureRmAccount -Environment $Environment        
+    }
+    $azcontext = Get-AzureRmContext
+    $azenvironment = Get-AzureRmEnvironment -Name $azcontext.Environment
+
+    # Load ADAL Assemblies
+    $adal = "${env:ProgramFiles(x86)}\Microsoft SDKs\Azure\PowerShell\ServiceManagement\Azure\Services\Microsoft.IdentityModel.Clients.ActiveDirectory.dll"
+    $adalforms = "${env:ProgramFiles(x86)}\Microsoft SDKs\Azure\PowerShell\ServiceManagement\Azure\Services\Microsoft.IdentityModel.Clients.ActiveDirectory.WindowsForms.dll"
+    $ignore = [System.Reflection.Assembly]::LoadFrom($adal)
+    $ignore = [System.Reflection.Assembly]::LoadFrom($adalforms)
+
+    $adTenant = $azcontext.Tenant.Id
+
+    $authority = $azenvironment.ActiveDirectoryAuthority + $adTenant
+    $resourceAppIdURI = $azenvironment.ResourceManagerUrl
+
+    # ClientId and Redirect URL
+    # Can be found in ArmClient code or with AzureAD:
+    # PS> Connect-AzureAD
+    # PS> $sp = Get-AzureADServicePrincipal -SearchString "Microsoft Azure PowerShell"
+    # PS> $sp.AppId
+    #  1950a258-227b-4e31-a9cf-717495945fc2
+    # PS> $sp.ReplyUrls
+    #  urn:ietf:wg:oauth:2.0:oob
+
+    $clientId = "1950a258-227b-4e31-a9cf-717495945fc2"
+    $redirectUri = "urn:ietf:wg:oauth:2.0:oob"
+
+    # Create Authentication Context tied to Azure AD Tenant
+    $authContext = New-Object "Microsoft.IdentityModel.Clients.ActiveDirectory.AuthenticationContext" -ArgumentList $authority
+
+    # Acquire token
+    $authResult = $authContext.AcquireToken($resourceAppIdURI, $clientId, $redirectUri, "Auto")
+
+    # Create Authorization Header
+    $authHeader = $authResult.CreateAuthorizationHeader()
+
+    #Remove "Bearer " and return token
+    $token = $authHeader.Substring(7)
+
+    return @{
+        'managementUrl' = $azenvironment.ResourceManagerUrl
+        'bearerToken' = $token 
+        'tenantId' = $adTenant
+    }
+}
+
 function GitAvailable {
     $gitexists = $false
 
