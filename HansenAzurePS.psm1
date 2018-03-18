@@ -277,7 +277,8 @@ function Get-AzureBearerToken {
 
     # Inspiration for this function from:
     # - ArmClient: https://github.com/projectkudu/ARMClient
-    # - www.bizbert.com/bizbert/2015/07/08/SettingUpPostManToCallTheAzureManagementAPIs.aspx
+    # - https://www.deployazure.com/security/identity/authenticating-to-the-azure-resource-manager-api/
+    # - https://www.bizbert.com/bizbert/2015/07/08/SettingUpPostManToCallTheAzureManagementAPIs.aspx
 
     $azcontext = Get-AzureRmContext
     if ([string]::IsNullOrEmpty($azcontext.Account) -or
