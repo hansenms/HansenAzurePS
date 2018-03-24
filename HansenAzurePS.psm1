@@ -241,6 +241,9 @@ function Set-WebAppAADAuth {
         [string]$IssuerUrl,
     
         [Parameter(Mandatory = $false, Position = 5)]
+        [string[]]$AdditionalLoginParams = @( "resource=https://graph.microsoft.com" ),
+    
+        [Parameter(Mandatory = $false, Position = 6)]
         [ValidateSet("AzureCloud", "AzureUsGovernment", "AzureGermanCloud", "AzureChinaCloud")]
         [String]$Environment = "AzureCloud"
     )
@@ -263,7 +266,7 @@ function Set-WebAppAADAuth {
     $auth.properties.clientId = $ClientId
     $auth.properties.clientSecret = $ClientSecret
     $auth.properties.issuer = $IssuerUrl
-    $auth.properties.additionalLoginParams = @( "resource=https://graph.microsoft.com" )
+    $auth.properties.additionalLoginParams = $AdditionalLoginParams
 
     New-AzureRmResource -PropertyObject $auth.properties -ResourceGroupName $ResourceGroupName -ResourceType Microsoft.Web/sites/config -ResourceName $authResourceName -ApiVersion 2016-08-01 -Force
 }
